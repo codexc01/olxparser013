@@ -11,9 +11,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup,
                            KeyboardButton, Message, ReplyKeyboardMarkup)
 from sqlalchemy import distinct, func, select, update
-from sqlalchemy.dialects.postgresql import insert
-
-from .db import Control, Listing, Match, Notice, Run, Search, User, now
+from .db import Control, Listing, Match, Notice, Run, Search, User, dialect_insert, now
 from .monitor import details
 from .source import key, url
 
@@ -87,7 +85,7 @@ class Access(BaseMiddleware):
         if len(self.last) > 10000:
             self.last = {k:v for k,v in self.last.items() if t-v < 60}
         async with data['sessions'].begin() as db:
-            await db.execute(insert(User).values(id=uid).on_conflict_do_nothing())
+            await db.execute(dialect_insert(db, User).values(id=uid).on_conflict_do_nothing())
             data['db'] = db
             data['user'] = await db.get(User, uid)
             return await handler(event, data)

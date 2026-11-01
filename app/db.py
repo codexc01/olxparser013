@@ -1,15 +1,39 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.types import TypeDecorator
 
 
 def now():
     return datetime.now(timezone.utc)
 
 
+class UTCDateTime(TypeDecorator):
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and dialect.name == 'sqlite':
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and dialect.name == 'sqlite' and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+
 def stamp(**kw):
-    return Column(DateTime(timezone=True), **kw)
+    return Column(UTCDateTime(), **kw)
+
+
+def dialect_insert(session, model):
+    if session.get_bind().dialect.name == 'sqlite':
+        return sqlite_insert(model)
+    return postgresql_insert(model)
 
 
 class Base(DeclarativeBase):

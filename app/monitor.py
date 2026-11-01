@@ -8,9 +8,7 @@ import httpx
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
-
-from .db import Control, Listing, Match, Notice, Run, Search, User, now
+from .db import Control, Listing, Match, Notice, Run, Search, User, dialect_insert, now
 from .source import SourceError, fetch, matches
 
 
@@ -20,17 +18,17 @@ async def snapshot(db, searches, ads, max_age):
         matching = [s for s in searches if matches(ad, s.filters)]
         if not matching:
             continue
-        stmt = insert(Listing).values(id=ad['id'], data=ad, first_seen=detected, last_seen=detected)
+        stmt = dialect_insert(db, Listing).values(id=ad['id'], data=ad, first_seen=detected, last_seen=detected)
         await db.execute(stmt.on_conflict_do_update(index_elements=['id'], set_={'data': ad, 'last_seen': detected}))
         for s in matching:
             fresh = bool(s.initialized)
-            stmt = insert(Match).values(search_id=s.id, listing_id=ad['id'], new=fresh)
+            stmt = dialect_insert(db, Match).values(search_id=s.id, listing_id=ad['id'], new=fresh)
             added = await db.scalar(stmt.on_conflict_do_nothing().returning(Match.search_id))
             if not added or not fresh or not (await db.get(User, s.user_id)).enabled:
                 continue
             if max_age and (not ad['published'] or datetime.fromisoformat(ad['published']) < detected - timedelta(hours=max_age)):
                 continue
-            await db.execute(insert(Notice).values(user_id=s.user_id, listing_id=ad['id']).on_conflict_do_nothing())
+            await db.execute(dialect_insert(db, Notice).values(user_id=s.user_id, listing_id=ad['id']).on_conflict_do_nothing())
     for s in searches:
         s.initialized = s.initialized or detected
         s.success = detected
