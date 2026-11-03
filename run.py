@@ -1,31 +1,29 @@
+"""Entry point for the existing Bot-Hosting.net configuration."""
 import asyncio
+import json
+import logging
 import os
-import subprocess
-import sys
 
-from app.main import main
-from app.db import Base, Control
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from dotenv import load_dotenv
+
+from main import main
 
 
-async def prepare_sqlite(database_url):
-    engine = create_async_engine(database_url)
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
-    sessions = async_sessionmaker(engine)
-    async with sessions.begin() as session:
-        if await session.get(Control, 1) is None:
-            session.add(Control(id=1))
-    await engine.dispose()
+def configure_owner():
+    if os.getenv("OWNER_ID"):
+        return
+    admins = json.loads(os.getenv("ADMIN_IDS") or "[]")
+    if isinstance(admins, list) and len(admins) == 1 and type(admins[0]) is int and admins[0] > 0:
+        os.environ["OWNER_ID"] = str(admins[0])
+        return
+    raise SystemExit("Укажи OWNER_ID в настройках хостинга и перезапусти сервер")
 
 
 if __name__ == "__main__":
-    database_url = os.getenv('DATABASE_URL', 'sqlite+aiosqlite:///./olx-monitor.db')
-    if database_url.startswith('sqlite+'):
-        asyncio.run(prepare_sqlite(database_url))
-    else:
-        subprocess.run(
-            [sys.executable, "-m", "alembic", "upgrade", "head"],
-            check=True,
-        )
+    load_dotenv()
+    logging.basicConfig(level=logging.INFO)
+    if os.getenv("DIAGNOSE_ONLY") == "1":
+        from diagnose import run
+        raise SystemExit(asyncio.run(run()))
+    configure_owner()
     asyncio.run(main())
