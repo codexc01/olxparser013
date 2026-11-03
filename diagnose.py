@@ -7,7 +7,8 @@ from olx import APIError, OLX
 
 
 async def run():
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+    headers = {"Accept": "application/json", "User-Agent": "OLX-monitor/1.0"}
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15), headers=headers) as session:
         api = OLX(session)
         try:
             async for rows in api.offers(" ".join(sys.argv[1:]) or "телефон", 1):

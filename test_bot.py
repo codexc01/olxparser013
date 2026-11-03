@@ -67,6 +67,17 @@ class Network(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(APIError):
                 await OLX(session).get("url")
 
+    async def test_phone_403_does_not_pause_offers(self):
+        session = MagicMock()
+        response = session.get.return_value.__aenter__.return_value
+        response.status = 403
+        response.headers = {}
+        api = OLX(session, gap=0)
+        with self.assertRaises(APIError):
+            await api.phone(1)
+        self.assertGreater(api.phone_next, time.monotonic() + 890)
+        self.assertLessEqual(api.next, time.monotonic())
+
 
 class Telegram(unittest.IsolatedAsyncioTestCase):
     async def test_controls(self):

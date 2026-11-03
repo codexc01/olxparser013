@@ -20,6 +20,7 @@ class OLX:
         self.session = session
         self.lock = asyncio.Lock()
         self.next = 0
+        self.phone_next = 0
         self.gap = gap
 
     async def get(self, url, params=None, optional=False):
@@ -40,7 +41,10 @@ class OLX:
                                 delay = max(delay, (parsedate_to_datetime(retry) - datetime.now(timezone.utc)).total_seconds())
                             except (TypeError, ValueError, OverflowError):
                                 pass
-                        self.next = time.monotonic() + delay
+                        if optional and r.status == 403:
+                            self.phone_next = time.monotonic() + delay
+                        else:
+                            self.next = time.monotonic() + delay
                     if r.status != 200:
                         raise APIError(f"HTTP {r.status}")
                     data = await r.json()
@@ -69,6 +73,8 @@ class OLX:
                 break
 
     async def phone(self, offer):
+        if self.phone_next > time.monotonic():
+            raise APIError("Телефоны временно недоступны")
         data = await self.get(f"{BASE}{int(offer)}/phones/", optional=True)
         nums = data.get("phones") if isinstance(data, dict) else None
         return next((n[:50] for n in nums if isinstance(n, str) and n.strip()), "") if isinstance(nums, list) else ""

@@ -209,7 +209,8 @@ async def main():
     dp = Dispatcher()
     dp.include_router(interface(store, owner))
     async with Bot(os.environ["BOT_TOKEN"], default=DefaultBotProperties(link_preview_is_disabled=True)) as bot:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+        headers = {"Accept": "application/json", "User-Agent": "OLX-monitor/1.0"}
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15), headers=headers) as session:
             api = OLX(session, max(2, int(os.getenv("REQUEST_GAP", "3"))))
             async with asyncio.TaskGroup() as group:
                 workers = [group.create_task(monitor(store, api, max(15, int(os.getenv("CHECK_INTERVAL", "120"))),
