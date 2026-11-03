@@ -62,13 +62,19 @@ def interface(store, owner):
             return await m.answer("Тема удалена", reply_markup=MENU)
         price = "Любая" if t["cap"] is None else f"{t['cap']:g} {t['currency']}"
         status = "В работе" if t["active"] else "На паузе"
+        if t["last_check"]:
+            checked = datetime.fromtimestamp(t["last_check"], ZoneInfo("Asia/Tashkent")).strftime("%d.%m %H:%M")
+            result = f"Ошибка OLX: {t['last_error']}" if t["last_error"] else f"API доступен, найдено: {t['last_found']}"
+            check_status = f"\nПоследняя проверка: {checked}\n{result}"
+        else:
+            check_status = "\nПроверок ещё не было"
         rows = [[(name, f"{field}:{key}") for name, field in pair] for pair in [
             [("Запрос", "query"), ("Цена", "cap")], [("Город", "city"), ("Слова", "words")],
             [("Пауза" if t["active"] else "Возобновить", "toggle"), ("Проверить", "check")],
             [("Удалить", "delete"), ("Мои темы", "list")]]]
         rows[-1][-1] = ("Мои темы", "list:0")
         await m.answer(f"{t['query']} · {status}\nЦена до: {price}\nГород: {t['city'] or 'Любой'}\n"
-                       f"Слова: {t['words'] or 'Любые'}", reply_markup=keys(*rows))
+                       f"Слова: {t['words'] or 'Любые'}{check_status}", reply_markup=keys(*rows))
 
     @r.message(Command("start", "menu", "cancel"))
     async def menu(m: Message):
@@ -105,7 +111,7 @@ def interface(store, owner):
                 elif action == "check":
                     if not t["active"]:
                         return await m.answer("Сначала возобнови мониторинг темы")
-                    db.execute("UPDATE topics SET due=? WHERE id=?", (min(time.time(), t["due"]), key))
+                    db.execute("UPDATE topics SET due=?, manual=1 WHERE id=?", (min(time.time(), t["due"]), key))
                     db.commit()
                     return await m.answer("Тема в очереди на проверку")
                 elif action == "delete":
@@ -139,7 +145,7 @@ def interface(store, owner):
     return r
 
 
-async def monitor(store, api, interval, pages):
+async def monitor(store, api, interval, pages, bot, owner):
     db = store.db
     cleanup = 0
     while True:
@@ -154,13 +160,32 @@ async def monitor(store, api, interval, pages):
         if not t:
             await asyncio.sleep(1)
             continue
+        error = ""
+        found = 0
         try:
             async for offers in api.offers(t["query"], pages):
+                found += len(offers)
                 store.remember(t, offers)
         except APIError as exc:
+            error = str(exc)
             logging.warning("Тема %s: %s", t["id"], exc)
+        current = store.topic(t["id"])
+        requested = bool(current and current["revision"] == t["revision"] and current["manual"])
         with db:
-            db.execute("UPDATE topics SET due=? WHERE id=? AND revision=?", (time.time()+interval, t["id"], t["revision"]))
+            changed = db.execute(
+                "UPDATE topics SET due=?, manual=0, last_check=?, last_found=?, last_error=? "
+                "WHERE id=? AND revision=?",
+                (time.time()+interval, time.time(), found, error, t["id"], t["revision"]),
+            ).rowcount
+        if changed and requested:
+            text = (f"Проверка темы «{t['query']}»\nОшибка OLX: {error}"
+                    if error else
+                    f"Проверка темы «{t['query']}»\nAPI доступен, прочитано объявлений: {found}\n"
+                    "При первой проверке старые объявления сохраняются без уведомлений")
+            try:
+                await bot.send_message(owner, text)
+            except TelegramAPIError as exc:
+                logging.warning("Не удалось отправить результат проверки: %s", type(exc).__name__)
 
 
 async def deliver(store, api, bot, owner, phones):
@@ -214,7 +239,7 @@ async def main():
             api = OLX(session, max(2, int(os.getenv("REQUEST_GAP", "3"))))
             async with asyncio.TaskGroup() as group:
                 workers = [group.create_task(monitor(store, api, max(15, int(os.getenv("CHECK_INTERVAL", "120"))),
-                                                     max(1, min(10, int(os.getenv("MAX_PAGES", "2")))))),
+                                                     max(1, min(10, int(os.getenv("MAX_PAGES", "2")))), bot, owner)),
                            group.create_task(deliver(store, api, bot, owner, os.getenv("FETCH_PHONE", "1") == "1"))]
                 try:
                     await dp.start_polling(bot, handle_as_tasks=False, close_bot_session=False)

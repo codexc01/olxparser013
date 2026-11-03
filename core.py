@@ -41,13 +41,25 @@ class Store:
         PRAGMA foreign_keys=ON;
         CREATE TABLE IF NOT EXISTS topics(id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL,
           city TEXT DEFAULT '', words TEXT DEFAULT '', cap REAL, currency TEXT DEFAULT '',
-          active INTEGER DEFAULT 1, since REAL, due REAL DEFAULT 0, revision INTEGER DEFAULT 0);
+          active INTEGER DEFAULT 1, since REAL, due REAL DEFAULT 0, revision INTEGER DEFAULT 0,
+          manual INTEGER DEFAULT 0, last_check REAL, last_found INTEGER, last_error TEXT DEFAULT '');
         CREATE TABLE IF NOT EXISTS seen(topic INTEGER REFERENCES topics ON DELETE CASCADE, offer INTEGER,
           amount REAL, currency TEXT, touched REAL, PRIMARY KEY(topic,offer));
         CREATE INDEX IF NOT EXISTS seen_age ON seen(touched);
         CREATE TABLE IF NOT EXISTS pending(id INTEGER PRIMARY KEY, topic INTEGER REFERENCES topics ON DELETE CASCADE,
           body TEXT);
         """)
+        columns = {row[1] for row in self.db.execute("PRAGMA table_info(topics)")}
+        migrations = {
+            "manual": "INTEGER DEFAULT 0",
+            "last_check": "REAL",
+            "last_found": "INTEGER",
+            "last_error": "TEXT DEFAULT ''",
+        }
+        with self.db:
+            for name, definition in migrations.items():
+                if name not in columns:
+                    self.db.execute(f"ALTER TABLE topics ADD COLUMN {name} {definition}")
 
     def topic(self, key):
         return self.db.execute("SELECT * FROM topics WHERE id=?", (key,)).fetchone()

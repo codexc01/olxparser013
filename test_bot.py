@@ -45,6 +45,10 @@ class Storage(unittest.TestCase):
             with self.assertRaises(ValueError):
                 values("cap", v)
 
+    def test_status_columns_are_migrated(self):
+        columns = {row[1] for row in self.s.db.execute("PRAGMA table_info(topics)")}
+        self.assertTrue({"manual", "last_check", "last_found", "last_error"} <= columns)
+
 
 class Network(unittest.IsolatedAsyncioTestCase):
     async def test_http_and_schema(self):
