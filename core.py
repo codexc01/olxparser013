@@ -45,6 +45,7 @@ class Store:
           manual INTEGER DEFAULT 0, last_check REAL, last_found INTEGER, last_error TEXT DEFAULT '');
         CREATE TABLE IF NOT EXISTS seen(topic INTEGER REFERENCES topics ON DELETE CASCADE, offer INTEGER,
           amount REAL, currency TEXT, touched REAL, PRIMARY KEY(topic,offer));
+        CREATE TABLE IF NOT EXISTS recent(offer INTEGER PRIMARY KEY, created REAL, title TEXT, url TEXT);
         CREATE INDEX IF NOT EXISTS seen_age ON seen(touched);
         CREATE TABLE IF NOT EXISTS pending(id INTEGER PRIMARY KEY, topic INTEGER REFERENCES topics ON DELETE CASCADE,
           body TEXT);
@@ -74,9 +75,14 @@ class Store:
                 old = self.db.execute("SELECT * FROM seen WHERE topic=? AND offer=?", args).fetchone()
                 drop = (old and old["currency"] == a["currency"] and old["amount"] is not None
                         and a["amount"] is not None and old["amount"] > a["amount"])
-                if matches(t, a) and (drop or (not old and a["created"] >= t["since"])):
+                matched = matches(t, a)
+                if matched:
+                    self.db.execute("INSERT OR REPLACE INTO recent VALUES(?,?,?,?)",
+                                    (a["id"], a["created"], a["title"], a["url"]))
+                if matched and (drop or (not old and a["created"] >= t["since"])):
                     event = {k: v for k, v in a.items() if k != "words"}
                     event.update(query=t["query"], previous=old["amount"] if drop else None)
                     self.db.execute("INSERT INTO pending(topic,body) VALUES(?,?)", (t["id"], json.dumps(event)))
                 self.db.execute("INSERT OR REPLACE INTO seen VALUES(?,?,?,?,?)",
                                 (*args, a["amount"], a["currency"], time.time()))
+            self.db.execute("DELETE FROM recent WHERE offer IN (SELECT offer FROM recent ORDER BY created DESC, offer DESC LIMIT -1 OFFSET 10)")

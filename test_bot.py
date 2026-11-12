@@ -105,7 +105,11 @@ class Telegram(unittest.IsolatedAsyncioTestCase):
         bot.session.make_request.assert_not_called()
         await feed("/start")
         self.assertTrue(bot.session.make_request.called)
-        await feed("add", True)
+        for label, expected in [("❓ Помощь", "введи название"), ("🆕 Последние объявления", "Пока нет"),
+                                ("⚙️ Настройки", "Тем пока нет"), ("📋 Мои поиски", "Тем пока нет"),
+                                ("🔎 Добавить поиск", "Что ищем")]:
+            await feed(label)
+            self.assertIn(expected, bot.session.make_request.call_args.args[1].text)
         await feed("велосипед")
         await feed("📊 Статистика")
         self.assertIn("Активных тем: 1 из 1", bot.session.make_request.call_args.args[1].text)

@@ -87,7 +87,9 @@ def interface(store, owner, api=None):
         editing.clear()
         action, _, arg = (c.data or "").partition(":")
         key = int(arg) if arg.isdecimal() else 0
-        m = c.message
+        return await navigate(c.message, action, key)
+
+    async def navigate(m, action, key):
         if action == "list":
             topics = db.execute("SELECT * FROM topics ORDER BY id LIMIT 9 OFFSET ?", (key,)).fetchall()
             rows = [[(("🟢 " if t["active"] else "⏸ ") + t["query"][:40], f"show:{t['id']}")] for t in topics[:8]]
@@ -126,6 +128,23 @@ def interface(store, owner, api=None):
                 elif action == "confirm":
                     db.execute("DELETE FROM topics WHERE id=?", (key,))
         await card(m, key)
+
+    @r.message(F.text.in_({"🔎 Добавить поиск", "📋 Мои поиски", "⚙️ Настройки",
+                           "❓ Помощь", "🆕 Последние объявления"}))
+    async def keyboard(m: Message):
+        editing.clear()
+        if m.text == "❓ Помощь":
+            return await m.answer("Нажми «Добавить тему» и введи название товара. "
+                                  "В «Мои темы» можно выбрать город, цену и запустить проверку.", reply_markup=MENU)
+        if m.text == "🆕 Последние объявления":
+            rows = db.execute("SELECT title,url FROM recent ORDER BY created DESC, offer DESC LIMIT 10").fetchall()
+            if not rows:
+                return await m.answer("Пока нет сохранённых объявлений по твоим фильтрам.")
+            buttons = [[InlineKeyboardButton(text=row["title"][:90] or "Объявление", url=row["url"])] for row in rows]
+            return await m.answer("Последние объявления по твоим фильтрам", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+        if m.text == "⚙️ Настройки":
+            await m.answer("Выбери тему для настройки города, цены и обязательных слов.")
+        return await navigate(m, "add" if m.text == "🔎 Добавить поиск" else "list", 0)
 
     @r.message(F.text == "📊 Статистика")
     async def statistics(m: Message):
