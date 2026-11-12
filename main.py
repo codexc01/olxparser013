@@ -119,7 +119,7 @@ def interface(store, owner, api=None):
                     if remaining:
                         return await m.answer(
                             f"OLX вернул HTTP {api.retry_status}. Проверка в очереди. "
-                            f"Повтор возможен через {(remaining + 59) // 60} мин."
+                            f"Повтор возможен через {(remaining + 59) // 60} мин"
                         )
                     return await m.answer("Тема в очереди на проверку")
                 elif action == "delete":
@@ -135,15 +135,15 @@ def interface(store, owner, api=None):
         editing.clear()
         if m.text == "❓ Помощь":
             return await m.answer("Нажми «Добавить тему» и введи название товара. "
-                                  "В «Мои темы» можно выбрать город, цену и запустить проверку.", reply_markup=MENU)
+                                  "В «Мои темы» можно выбрать город, цену и запустить проверку", reply_markup=MENU)
         if m.text == "🆕 Последние объявления":
             rows = db.execute("SELECT title,url FROM recent ORDER BY created DESC, offer DESC LIMIT 10").fetchall()
             if not rows:
-                return await m.answer("Пока нет сохранённых объявлений по твоим фильтрам.")
+                return await m.answer("Пока нет сохранённых объявлений по твоим фильтрам")
             buttons = [[InlineKeyboardButton(text=row["title"][:90] or "Объявление", url=row["url"])] for row in rows]
             return await m.answer("Последние объявления по твоим фильтрам", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
         if m.text == "⚙️ Настройки":
-            await m.answer("Выбери тему для настройки города, цены и обязательных слов.")
+            await m.answer("Выбери тему для настройки города, цены и обязательных слов")
         return await navigate(m, "add" if m.text == "🔎 Добавить поиск" else "list", 0)
 
     @r.message(F.text == "📊 Статистика")
