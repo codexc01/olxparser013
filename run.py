@@ -19,7 +19,7 @@ def configure_owner():
     raise SystemExit("Укажи OWNER_ID в настройках хостинга и перезапусти сервер")
 
 
-if __name__ == "__main__":
+def start():
     load_dotenv()
     logging.basicConfig(level=logging.INFO)
     if os.getenv("DIAGNOSE_ONLY") == "1":
@@ -27,3 +27,7 @@ if __name__ == "__main__":
         raise SystemExit(asyncio.run(run()))
     configure_owner()
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    start()

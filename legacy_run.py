@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 
-from app.main import main
+from app.legacy_main import main
 from app.db import Base, Control
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 

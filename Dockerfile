@@ -1,8 +1,9 @@
 FROM python:3.12-slim
-ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 DB_PATH=/data/olx.sqlite3
 WORKDIR /srv/bot
-COPY requirements-legacy.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt && useradd -m -u 10001 monitor
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && useradd -m -u 10001 monitor && install -d -o monitor /data
 COPY . .
 USER monitor
-CMD ["sh","-ec","alembic upgrade head && exec python -m app.main"]
+VOLUME ["/data"]
+CMD ["python", "run.py"]

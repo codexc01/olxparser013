@@ -108,5 +108,6 @@ python -m unittest -v
 Темы из прежнего бота нужно добавить заново
 Перед сменой версии проверь выдачу с IP сервера через DIAGNOSE_ONLY=1
 
-Прежнее приложение, его тесты и Docker с PostgreSQL сохранены, инструкции находятся в README-legacy.md
+Docker и команда python -m app.main запускают API-бота через run.py
+Для прежнего Docker с PostgreSQL используй docker compose -f docker-compose.legacy.yml up --build
 Для прежнего запуска с Python используй requirements-legacy.txt и legacy_run.py
