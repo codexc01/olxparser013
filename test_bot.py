@@ -107,6 +107,8 @@ class Telegram(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(bot.session.make_request.called)
         await feed("add", True)
         await feed("велосипед")
+        await feed("📊 Статистика")
+        self.assertIn("Активных тем: 1 из 1", bot.session.make_request.call_args.args[1].text)
         await feed("cap:1", True)
         await feed("450 USD")
         self.assertEqual(s.topic(1)["cap"], 450)

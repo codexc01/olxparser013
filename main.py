@@ -49,7 +49,7 @@ def values(field, value):
     return {field: "" if value == "-" and field != "query" else value}
 
 
-def interface(store, owner):
+def interface(store, owner, api=None):
     r = Router()
     r.message.filter(F.from_user.id == owner, F.chat.type == ChatType.PRIVATE)
     r.callback_query.filter(F.from_user.id == owner, F.message.chat.type == ChatType.PRIVATE)
@@ -113,6 +113,12 @@ def interface(store, owner):
                         return await m.answer("Сначала возобнови мониторинг темы")
                     db.execute("UPDATE topics SET due=?, manual=1 WHERE id=?", (min(time.time(), t["due"]), key))
                     db.commit()
+                    remaining = api.retry_seconds() if api else 0
+                    if remaining:
+                        return await m.answer(
+                            f"OLX вернул HTTP {api.retry_status}. Проверка в очереди. "
+                            f"Повтор возможен через {(remaining + 59) // 60} мин."
+                        )
                     return await m.answer("Тема в очереди на проверку")
                 elif action == "delete":
                     return await m.answer("Удалить эту тему?", reply_markup=keys(
@@ -120,6 +126,14 @@ def interface(store, owner):
                 elif action == "confirm":
                     db.execute("DELETE FROM topics WHERE id=?", (key,))
         await card(m, key)
+
+    @r.message(F.text == "📊 Статистика")
+    async def statistics(m: Message):
+        editing.clear()
+        total, active = db.execute("SELECT count(*), count(*) FILTER (WHERE active) FROM topics").fetchone()
+        pending = db.execute("SELECT count(*) FROM pending").fetchone()[0]
+        await m.answer(f"📊 Статистика\nАктивных тем: {active} из {total}\n"
+                       f"Объявлений в очереди на отправку: {pending}", reply_markup=MENU)
 
     @r.message(F.text)
     async def entry(m: Message):
@@ -232,11 +246,11 @@ async def main():
     owner = int(os.environ["OWNER_ID"])
     store = Store(os.getenv("DB_PATH", "olx.sqlite3"))
     dp = Dispatcher()
-    dp.include_router(interface(store, owner))
     async with Bot(os.environ["BOT_TOKEN"], default=DefaultBotProperties(link_preview_is_disabled=True)) as bot:
         headers = {"Accept": "application/json", "User-Agent": "OLX-monitor/1.0"}
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15), headers=headers) as session:
             api = OLX(session, max(2, int(os.getenv("REQUEST_GAP", "3"))))
+            dp.include_router(interface(store, owner, api))
             async with asyncio.TaskGroup() as group:
                 workers = [group.create_task(monitor(store, api, max(15, int(os.getenv("CHECK_INTERVAL", "120"))),
                                                      max(1, min(10, int(os.getenv("MAX_PAGES", "2")))), bot, owner)),

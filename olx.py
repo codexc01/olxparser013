@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -22,6 +23,11 @@ class OLX:
         self.next = 0
         self.phone_next = 0
         self.gap = gap
+        self.retry_until = 0
+        self.retry_status = None
+
+    def retry_seconds(self):
+        return max(0, math.ceil(self.retry_until - time.monotonic()))
 
     async def get(self, url, params=None, optional=False):
         if optional and (self.lock.locked() or self.next > time.monotonic() + self.gap):
@@ -44,7 +50,8 @@ class OLX:
                         if optional and r.status == 403:
                             self.phone_next = time.monotonic() + delay
                         else:
-                            self.next = time.monotonic() + delay
+                            self.next = self.retry_until = time.monotonic() + delay
+                            self.retry_status = r.status
                     if r.status != 200:
                         raise APIError(f"HTTP {r.status}")
                     data = await r.json()
